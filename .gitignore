@@ -24,3 +24,4 @@ backend/.eslintcache
 backend/.yarn
 backend/.pnp
 backend/uploads
+.env
