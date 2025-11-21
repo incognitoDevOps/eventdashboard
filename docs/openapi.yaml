@@ -1,0 +1,818 @@
+openapi: 3.0.0
+info:
+  title: EventMate API
+  description: API documentation for EventMate application
+  version: 1.0.0
+  contact:
+    name: EventMate Support
+    email: pradyumna_7@outlook.com
+    url: N/A
+
+servers:
+  # - url: https://api.eventmate.com/v1
+  #   description: Production server
+  # - url: https://api-staging.eventmate.com/v1
+  #   description: Staging server
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Verification
+    description: Payment verification related operations
+  - name: Participants
+    description: Operations related to participant management
+  - name: Activities
+    description: Operations related to activity logging and tracking
+
+paths:
+  /verify-payments:
+    post:
+      operationId: verifyPayments
+      summary: Verify payments from PhonePe statement against participants list
+      description: |
+        This endpoint takes a PhonePe PDF statement and a CSV file containing 
+        participant data, then verifies if participants have made the expected payment.
+        It matches UTR IDs from the PDF with those in the CSV and checks if the amounts match.
+      tags:
+        - Verification
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - phonepeFile
+                - participantsFile
+                - expectedAmount
+              properties:
+                phonepeFile:
+                  type: string
+                  format: binary
+                  description: PhonePe PDF statement containing transactions
+                participantsFile:
+                  type: string
+                  format: binary
+                  description: CSV file with participant details including UTR IDs
+                expectedAmount:
+                  type: number
+                  description: Expected payment amount for verification
+      responses:
+        '200':
+          description: Successful verification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResponse'
+              example:
+                $ref: '#/components/examples/successfulVerification'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Both PhonePe statement and participants list are required"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to verify payments"
+
+  /results:
+    get:
+      operationId: getVerificationResults
+      summary: Get verification results
+      description: Retrieves the results of previous payment verifications and returns list of all participants with verification status.
+      tags:
+        - Verification
+      responses:
+        '200':
+          description: Successful retrieval of verification results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  verifiedCount:
+                    type: integer
+                    description: Number of verified payments
+                    example: 42
+                  totalCount:
+                    type: integer
+                    description: Total number of participants
+                    example: 50
+                  pending:
+                    type: integer
+                    description: Number of participants with pending verification
+                    example: 8
+                  participants:
+                    type: array
+                    description: List of participants with verification status
+                    items:
+                      $ref: '#/components/schemas/ParticipantData'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to retrieve verification results"
+
+  /verify/{id}:
+    put:
+      operationId: updateVerificationStatus
+      summary: Update participant verification status
+      description: Updates the verification status of a specific participant by ID
+      tags:
+        - Verification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Participant ID to update
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - verified
+              properties:
+                verified:
+                  type: boolean
+                  description: New verification status
+                  example: true
+      responses:
+        '200':
+          description: Verification status successfully updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Verification status updated successfully"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Participant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Participant not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /unverify/{id}:
+    put:
+      operationId: undoVerification
+      summary: Undo participant verification
+      description: Removes verification status of a specific participant by ID
+      tags:
+        - Verification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Participant ID to unverify
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verification successfully removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Verification status removed successfully"
+        '404':
+          description: Participant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Participant not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /delete:
+    delete:
+      operationId: deleteParticipants
+      summary: Delete all participants (Verified and Not Verified)
+      description: Removes all participants data from the system, including verification status
+      tags:
+        - Verification
+      responses:
+        '200':
+          description: All participants successfully deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "All participants deleted successfully"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to delete participants"
+
+  /participants/verified:
+    get:
+      operationId: getVerifiedParticipants
+      summary: Get verified participants
+      description: Retrieves the list of participants who have been verified
+      tags:
+        - Participants
+      responses:
+        '200':
+          description: Successfully retrieved verified participants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  participants:
+                    type: array
+                    description: List of verified participants
+                    items:
+                      $ref: '#/components/schemas/ParticipantData'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to retrieve verified participants"
+
+  /participants/generate-qr:
+    post:
+      operationId: generateQRCodes
+      summary: Generate QR codes for participants
+      description: Generates unique QR codes for verified participants that can be used for event check-in
+      tags:
+        - Participants
+      responses:
+        '200':
+          description: Successfully generated QR codes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  message:
+                    type: string
+                    example: "QR codes successfully generated for 42 participants"
+                  count:
+                    type: integer
+                    description: Number of QR codes generated
+                    example: 42
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "No verified participants found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to generate QR codes"
+                
+  /participants/send-qr:
+    post:
+      operationId: sendQRCodes
+      summary: Send QR codes to participants via email
+      description: Sends the generated QR codes to verified participants via email for event entry
+      tags:
+        - Participants
+      responses:
+        '200':
+          description: Successfully sent QR codes via email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  message:
+                    type: string
+                    example: "QR codes successfully sent to 42 participants"
+                  sentCount:
+                    type: integer
+                    description: Number of emails sent
+                    example: 42
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "No QR codes found to send"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to send QR codes via email"
+
+  /participants/get-all-attendees:
+    get:
+      operationId: getAllAttendees
+      summary: Get all attendees
+      description: Retrieves the list of all attendees
+      tags:
+        - Participants
+      responses:
+        '200':
+          description: Successfully retrieved all attendees
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  attendees:
+                    type: array
+                    description: List of all attendees
+                    items:
+                      $ref: '#/components/schemas/ParticipantData'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to retrieve attendees"
+
+  /participants/mark-attendance:
+    post:
+      operationId: markAttendance
+      summary: Mark attendance for a participant
+      description: Marks the attendance of a participant by their ID
+      tags:
+        - Participants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: string
+                  description: Participant ID
+                  example: "1"
+      responses:
+        '200':
+          description: Attendance successfully marked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Attendance marked successfully"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Participant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Participant not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /participants/{id}:
+    get:
+      operationId: getParticipantById
+      summary: Get participant by ID
+      description: Retrieves a participant's details by their ID
+      tags:
+        - Participants
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Participant ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved participant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  participant:
+                    $ref: '#/components/schemas/ParticipantData'
+        '404':
+          description: Participant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Participant not found"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /participants/unattended:
+    get:
+      operationId: getUnattendedParticipants
+      summary: Get verified but unattended participants
+      description: Retrieves the list of participants who have been verified but not yet marked as attended
+      tags:
+        - Participants
+      parameters:
+        - name: search
+          in: query
+          required: false
+          description: Search term to filter participants
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved unattended participants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  count:
+                    type: integer
+                    description: Number of unattended participants
+                    example: 15
+                  data:
+                    type: array
+                    description: List of unattended participants
+                    items:
+                      $ref: '#/components/schemas/ParticipantData'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to retrieve unattended participants"
+  
+  /activities/recent:
+    get:
+      operationId: getRecentActivities
+      summary: Get recent activities
+      description: Retrieves a list of recent system activities
+      tags:
+        - Activities
+      responses:
+        '200':
+          description: Successfully retrieved recent activities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  data:
+                    type: array
+                    description: List of recent activities
+                    items:
+                      $ref: '#/components/schemas/Activity'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to retrieve activities"
+
+  /activities/all:
+    get:
+      operationId: getAllActivities
+      summary: Get all activities
+      description: Retrieves a complete list of all system activities
+      tags:
+        - Activities
+      responses:
+        '200':
+          description: Successfully retrieved all activities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  data:
+                    type: array
+                    description: List of all activities
+                    items:
+                      $ref: '#/components/schemas/Activity'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to retrieve activities"
+
+  /activities/delete-all:
+    delete:
+      operationId: deleteAllActivities
+      summary: Delete all activities
+      description: Removes all recorded activities from the system
+      tags:
+        - Activities
+      responses:
+        '200':
+          description: Successfully deleted all activities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Whether the API call was successful
+                    example: true
+                  message:
+                    type: string
+                    example: "All activities deleted successfully"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to delete activities"
+
+components:
+  schemas:
+    VerificationResponse:
+      type: object
+      required:
+        - success
+        - verifiedCount
+        - totalCount
+        - participants
+      properties:
+        success:
+          type: boolean
+          description: Whether the API call was successful
+          example: true
+        verifiedCount:
+          type: integer
+          description: Number of participants with verified payments
+          example: 42
+        totalCount:
+          type: integer
+          description: Total number of participants
+          example: 50
+        participants:
+          type: array
+          description: List of participants with verification status
+          items:
+            $ref: '#/components/schemas/ParticipantData'
+    
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "An error occurred processing your request"
+    
+    PhonePeTransaction:
+      type: object
+      required:
+        - date
+        - utrId
+        - amount
+        - type
+      properties:
+        date:
+          type: string
+          description: Transaction date
+          example: "01-01-2023"
+        utrId:
+          type: string
+          description: Unique Transaction Reference ID
+          example: "123456789012"
+        amount:
+          type: number
+          description: Transaction amount
+          example: 500
+        type:
+          type: string
+          enum: [CREDIT, DEBIT]
+          description: Transaction type
+          example: "CREDIT"
+    
+    ParticipantData:
+      type: object
+      required:
+        - id
+        - name
+        - email
+        - phone
+        - utrId
+        - amount
+        - verified
+      properties:
+        id:
+          type: integer
+          description: Participant ID
+          example: 1
+        name:
+          type: string
+          description: Participant name
+          example: "John Doe"
+        email:
+          type: string
+          description: Participant email
+          example: "john.doe@example.com"
+        phone:
+          type: string
+          description: Participant phone number
+          example: "9876543210"
+        utrId:
+          type: string
+          description: UTR ID from payment
+          example: "123456789012"
+        amount:
+          type: number
+          description: Payment amount
+          example: 500
+        verified:
+          type: boolean
+          description: Whether payment is verified
+          example: true
+          
+    Activity:
+      type: object
+      properties:
+        action:
+          type: string
+          description: The action that was performed
+          example: "Payment verified"
+        user:
+          type: string
+          description: The user or participant associated with the action
+          example: "John Doe"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the activity occurred
+          example: "2023-06-15T08:30:00Z"
+          
+  examples:
+    successfulVerification:
+      value:
+        success: true
+        verifiedCount: 42
+        totalCount: 50
+        participants:
+          - id: 1
+            name: "John Doe"
+            email: "john.doe@example.com"
+            phone: "9876543210"
+            utrId: "123456789012"
+            amount: 500
+            verified: true
+          - id: 2
+            name: "Jane Smith"
+            email: "jane.smith@example.com"
+            phone: "9876543211"
+            utrId: "123456789013"
+            amount: 500
+            verified: false
